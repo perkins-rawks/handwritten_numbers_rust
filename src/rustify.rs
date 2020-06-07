@@ -17,7 +17,6 @@
 //      ✓ exp - vectorization
 //      ✓ randn
 //      o zip (array1, array2) -> { (array1, array2) }
-//      o network struct
 
 
 pub use ndarray::Array2;                    // Allows us to use 2D Matrices
@@ -44,7 +43,7 @@ pub fn randn((x, y): (usize, usize)) -> Array2<f64> {
 
 // Let v = < v_1, v_2, ..., v_n>.
 // Then, exp(v) = < exp(v_1), exp(v_2), ..., exp(v_n) > 
-pub fn exp(z: & Array2<f64>) -> Array2<f64> {
+pub fn exp(z: & Array2<f64>, scalar: f64) -> Array2<f64> {
     // Euler's constant
     const E: f64 = 2.71828182845904523536028747135266250f64;
 
@@ -52,7 +51,7 @@ pub fn exp(z: & Array2<f64>) -> Array2<f64> {
     let mut result = Array2::<f64>::zeros((z_sh[0], z_sh[1]));
     for (idx, row) in z.iter().enumerate() {
         // only works for vectors
-        result[[idx, 0]] = E.powf(*row);
+        result[[idx, 0]] = E.powf(scalar * *row);
     }
     result
 }//----------------------------------------------------------------------------
