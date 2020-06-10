@@ -8,13 +8,13 @@
 * CITES: http://neuralnetworksanddeeplearning.com/index.html
 *        https://docs.rs/rand/0.7.3/rand/seq/trait.SliceRandom.html#tymethod.shuffle
 *
-* To do: ✓✓✓✓✓✓✓✓✓✓✓ c✓✓ instead of c++
-*      o Network struct
+* To do: 
+*      ✓ Network struct
 *      ✓ Constructor
 *      ✓ feedforward
-*      o update_mini_batch
-*      o SGD
-*      o backprop
+*      ✓ update_mini_batch
+*      ✓ SGD
+*      ✓ backprop
 *      ✓ sigmoid
 *      ✓ sigmoid_prime
 *      ✓ evaluate
@@ -24,6 +24,8 @@
 mod rustify;
 #[macro_use(c)]
 extern crate cute;
+use rand::thread_rng;
+use rand::seq::SliceRandom;
 
 struct Network {
     sizes: Vec<usize>,
@@ -44,25 +46,90 @@ impl Network {
         }
     }
 
-    // pub fn print(&self) {
-    //     println!("w: {:?}", self.weights);
-    // }
-
-    pub fn feedforward(&self, a: &mut rustify::Array2<f64>) -> rustify::Array2<f64> {
+    pub fn feedforward(&self, a: rustify::Array2<f64>) -> rustify::Array2<f64> {
         let mut result: rustify::Array2<f64> = a.clone();
         for (b, w) in self.biases.iter().zip(self.weights.iter()) {
             result = sigmoid(& (w.dot(&result) + b) );
-        } 
+        }
         result
     }
 
-    // pub fn SGD(&mut self) {
+    pub fn SGD(&mut self, training_data: &mut Vec<(rustify::Array2<f64>, usize)>, epochs: usize, mini_batch_size: usize, eta: f64, test_data: Option<Vec<&mut (rustify::Array2<f64>, usize)>>) {
+        let mut n_test: usize = 0;
+        let mut test_data2: Vec<&mut (rustify::Array2<f64>, usize)> = vec![];
+        if let Some(i) = test_data { // SOME (test_data) alternatively
+            n_test = i.len();
+            test_data2 = i;
+        }
 
-    // }
+        let n = training_data.len();
+        for j in 0..epochs {
+            // shuffle the training data
+            training_data.shuffle(&mut thread_rng());
+            let mut mini_batches: Vec< Vec< (rustify::Array2<f64>, usize) > > = vec![];
+            for k in (0..n).step_by(mini_batch_size) {
+                if k + mini_batch_size < n {
+                    let mut batch: Vec<(rustify::Array2<f64>, usize)> = vec![];
+                    for l in k..(k + mini_batch_size) {
+                        batch.push(training_data[l].clone());
+                    }
+                    mini_batches.push(batch);
+                }
+                else {
+                    let mut batch: Vec<(rustify::Array2<f64>, usize)> = vec![];
+                    let mut i = k;
+                    while i < n {
+                        batch.push(training_data[i].clone());
+                        i += 1;
+                    }
+                    mini_batches.push(batch);
+                }
+            }
 
-    // pub fn update_mini_batch(&mut self) {
+            for mini_batch in mini_batches {
+                self.update_mini_batch(& mini_batch, eta);
+            }
+            if n_test != 0 {
+                println!("Epoch {}: {} / {}", j, self.evaluate(& test_data2), n_test);
+            }
+            else {
+                println!("Epoch {} complete", j);
+            }
+        }  
+    }
 
-    // }
+    pub fn update_mini_batch(&mut self, mini_batch: & Vec<(rustify::Array2<f64>, usize)>, eta: f64) {
+        let mut nabla_b = c![rustify::Array2::<f64>::zeros((b.shape()[0], b.shape()[1])), for b in self.biases.iter()];
+        let mut nabla_w = c![rustify::Array2::<f64>::zeros((w.shape()[0], w.shape()[1])), for w in self.weights.iter()];
+    
+        for (x, y) in mini_batch {
+            let (delta_nabla_b, delta_nabla_w) = self.backprop(&x, *y);
+            nabla_b = c![nabla.0 + nabla.1, for nabla in nabla_b.iter().zip(delta_nabla_b.iter())];
+            nabla_w = c![nabla.0 + nabla.1, for nabla in nabla_w.iter().zip(delta_nabla_w.iter())];
+        }
+
+        let mut weights2: Vec< rustify::Array2<f64> > = vec![];
+        for (w, nw) in self.weights.iter().zip(nabla_w.iter()) {
+            let w2: rustify::Array2<f64> = w.clone();
+            let nw2: rustify::Array2<f64> = nw.clone();
+            let math_part = w2 - ((eta/(mini_batch.len() as f64)) * nw2);
+            weights2.push(math_part);
+        }
+        self.weights = weights2;
+    
+        let mut biases2: Vec< rustify::Array2<f64> > = vec![];
+        for (b, nb) in self.biases.iter().zip(nabla_b.iter()) {
+            let b2: rustify::Array2<f64> = b.clone();
+            let nw2: rustify::Array2<f64> = nb.clone();
+            let math_part = b2 - ((eta/(mini_batch.len() as f64)) * nw2);
+            biases2.push(math_part);
+        }
+        self.biases = biases2;
+
+
+        // self.weights = c![wt.0 - (wt.1 * (eta/(mini_batch.len() as f64))), for wt in self.weights.iter().zip(nabla_w.iter())];
+        // self.biases = c![bs.0  - ((eta/ (mini_batch.len() as f64))*bs.1), for bs in self.biases.iter().zip(nabla_b.iter())];
+    }
 
     pub fn backprop(& self, x: & rustify::Array2<f64>, y: usize) -> (Vec< rustify::Array2<f64> >, Vec< rustify::Array2<f64> >){
         let mut nabla_b = c![rustify::Array2::<f64>::zeros((b.shape()[0], b.shape()[1])), for b in self.biases.iter()];
@@ -101,8 +168,8 @@ impl Network {
         (nabla_b, nabla_w)
     }
 
-    pub fn evaluate(&self, test_data: Vec<&mut (rustify::Array2<f64>, usize)>) -> usize {
-        let test_results = c![(rustify::argmax(&self.feedforward(&mut x.0)), x.1), 
+    pub fn evaluate(&self, test_data: & Vec<&mut (rustify::Array2<f64>, usize)>) -> usize {
+        let test_results = c![(rustify::argmax(&self.feedforward(x.0.clone())), x.1), 
                                 for x in test_data];
         test_results.iter().map(|w| (w.0 == w.1) as usize).sum()
     }
@@ -114,12 +181,12 @@ impl Network {
 
 /// Private auxillary functions
 
-fn sigmoid(z: & rustify::Array2<f64>) -> rustify::Array2<f64> {
+pub fn sigmoid(z: & rustify::Array2<f64>) -> rustify::Array2<f64> {
     1.0/(1.0 + rustify::exp(&z, -1.0))
 }
 
 // The first derivative of the sigmoid function 
-fn sigmoid_prime(z: & rustify::Array2<f64>) -> rustify::Array2<f64> {
+pub fn sigmoid_prime(z: & rustify::Array2<f64>) -> rustify::Array2<f64> {
     sigmoid(z) * (1.0 - sigmoid(z))
 }
 
